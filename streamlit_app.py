@@ -7,6 +7,7 @@ import base64
 import csv
 from geopy.distance import geodesic
 from pyproj import Geod
+import textwrap
 
 # =========================
 # Helper Functions
@@ -288,15 +289,17 @@ def create_notam_template(distance1, psn1, br1, mag1, name1, ad1,
         return None
     
     # Create the NOTAM template
-    template = f"""WI {distance1}NM EITHER SIDE OF A LINE BTN  
-    PSN {psn1} BRG {br1} MAG {mag1}NM FM {name1.upper()} AD ({ad1}) AND 
-    PSN {psn2} BRG {br2} MAG {mag2}NM FM {name2.upper()} AD ({ad2})
+    template = textwrap.dedent(f"""
+    WI {distance1} NM EITHER SIDE OF A LINE BTN  
+    PSN {psn1} BRG {br1} MAG {mag1} NM FM {name1.upper()} AD ({ad1}) AND 
+    PSN {psn2} BRG {br2} MAG {mag2} NM FM {name2.upper()} AD ({ad2})
     OPR WILL BCST ON CTAF {freq1} AND 
-    MNT BRISBANE CENTRE FREQ {freq2} 15MIN PRIOR LAUNCH AND 
-    AT 15MIN INTERVALS WHILST AIRBORNE
+    MNT BRISBANE CENTRE FREQ {freq2} 15 MIN PRIOR LAUNCH AND 
+    AT 15 MIN INTERVALS WHILST AIRBORNE
     OPR CTC TEL: {telephone}
-    UA EQUIPPED WITH ADS-B IN/OUT"""
-    
+    UA EQUIPPED WITH ADS-B IN/OUT
+    """)
+
     return template
 
 def format_coordinates_dd_to_dms(coords):
