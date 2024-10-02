@@ -367,8 +367,23 @@ def render_streamlit_app():
 
         distance1 = st.text_input("Distance either side of the line (NM)", value="2")
 
+        # Define CSS for the border
+        border_css = """
+        <style>
+        .section {
+            border: 2px solid #4CAF50; /* Green border */
+            padding: 10px;
+            margin: 10px 0;
+        }
+        </style>
+        """
+
+        # Inject CSS into the Streamlit app
+        st.markdown(border_css, unsafe_allow_html=True)
+
         # Layout: Use columns to organize input fields
-        st.write("### Northern Point - automatically generated from KML file")
+        st.markdown('<div class="section">', unsafe_allow_html=True)
+        st.write("### Northern Point - <span style='color: yellow; font-size: 0.6em;'>automatically generated from KML file</span>", unsafe_allow_html=True)
         col1, col2 = st.columns(2)
 
         with col1:
@@ -377,8 +392,10 @@ def render_streamlit_app():
         with col2:
             br1 = st.text_input("Bearing from first aviation facility (MAG)", value=str(aerodrome_info['start']['bearing']) if 'aerodrome_info' in locals() else "")
             mag1 = st.text_input("Distance from first aviation facility (NM)", value=str(aerodrome_info['start']['distance']) if 'aerodrome_info' in locals() else "")
+        st.markdown('</div>', unsafe_allow_html=True)
 
-        st.write("### Southern Point - automatically generated from KML file")
+        st.markdown('<div class="section">', unsafe_allow_html=True)
+        st.write("### Southern Point - <span style='color: yellow; font-size: 0.6em;'>automatically generated from KML file</span>", unsafe_allow_html=True)
         col1, col2 = st.columns(2)
         with col1:
             name2 = st.text_input("Name of second aviation facility", value=aerodrome_info['end']['name'] if 'aerodrome_info' in locals() else "")
@@ -386,6 +403,9 @@ def render_streamlit_app():
         with col2:
             br2 = st.text_input("Bearing from second aviation facility (MAG)", value=str(aerodrome_info['end']['bearing']) if 'aerodrome_info' in locals() else "")
             mag2 = st.text_input("Distance from second aviation facility (NM)", value=str(aerodrome_info['end']['distance']) if 'aerodrome_info' in locals() else "")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        st.markdown('<div class="section">', unsafe_allow_html=True)
 
         st.write("### Communications")
         col1, col2, col3 = st.columns(3)
