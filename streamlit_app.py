@@ -4,6 +4,9 @@ import math
 from math import radians, sin, cos, atan2, sqrt, degrees, asin, floor
 from xml.etree import ElementTree as ET
 import base64
+import csv
+from geopy.distance import geodesic
+from pyproj import Geod
 
 # =========================
 # Helper Functions
@@ -195,6 +198,88 @@ def extract_kml_coordinates(kml_content):
     st.write(f"Extracted Coordinates from KML: {coords_list}")  # Debug
     return coords_list
 
+# =========================
+# Find closest aerodrome
+# =========================
+
+def load_aerodromes(file_path):
+    """Load aerodromes from a CSV file."""
+    aerodromes = []
+    with open(file_path, 'r') as file:
+        reader = csv.DictReader(file)
+        for row in reader:
+            aerodromes.append({
+                'name': row['name'],
+                'code': row['code'],
+                'lat': float(row['lat']),
+                'lon': float(row['lon'])
+            })
+    return aerodromes
+
+def find_closest_aerodrome(lat, lon, aerodromes):
+    """Find the closest aerodrome to the given coordinates."""
+    closest = min(aerodromes, key=lambda x: geodesic((lat, lon), (x['lat'], x['lon'])).nautical)
+    distance = geodesic((lat, lon), (closest['lat'], closest['lon'])).nautical
+    return closest, distance
+
+def calculate_bearing(lat1, lon1, lat2, lon2):
+    """Calculate the initial bearing from point 1 to point 2."""
+    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+    dL = lon2 - lon1
+    X = cos(lat2) * sin(dL)
+    Y = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dL)
+    initial_bearing = atan2(X, Y)
+    initial_bearing = degrees(initial_bearing)
+    compass_bearing = (initial_bearing + 360) % 360
+    return compass_bearing
+
+def magnetic_bearing(true_bearing, magnetic_variation):
+    """Convert true bearing to magnetic bearing."""
+    return (true_bearing - magnetic_variation + 360) % 360
+
+# ... (existing code) ...
+
+def format_coordinates_dd_to_dms(coords):
+    """Format decimal degrees coordinates to DMS (Degrees, Minutes, Seconds) string."""
+    formatted_coords = []
+    for lat, lon in coords[:2]:  # Assuming only two coordinates are needed
+        psn = f"{dd_to_dms(lat, is_lat=True)} {dd_to_dms(lon, is_lat=False)}"
+        formatted_coords.append(psn)
+    return formatted_coords
+
+# Add this new function
+def get_aerodrome_info(kml_coords, aerodromes):
+    """Get aerodrome information for the start and end points of the KML file."""
+    start_point = kml_coords[0]
+    end_point = kml_coords[-1]
+    
+    start_aerodrome, start_distance = find_closest_aerodrome(start_point[0], start_point[1], aerodromes)
+    end_aerodrome, end_distance = find_closest_aerodrome(end_point[0], end_point[1], aerodromes)
+    
+    # Calculate bearings FROM the aerodromes TO the points
+    start_bearing = calculate_bearing(start_aerodrome['lat'], start_aerodrome['lon'], start_point[0], start_point[1])
+    end_bearing = calculate_bearing(end_aerodrome['lat'], end_aerodrome['lon'], end_point[0], end_point[1])
+    
+    # Convert to magnetic bearing (assuming 10 degrees east variation)
+    magnetic_variation = 10
+    start_mag_bearing = magnetic_bearing(start_bearing, magnetic_variation)
+    end_mag_bearing = magnetic_bearing(end_bearing, magnetic_variation)
+    
+    return {
+        'start': {
+            'name': start_aerodrome['name'],
+            'code': start_aerodrome['code'],
+            'bearing': round(start_mag_bearing),
+            'distance': round(start_distance, 1)
+        },
+        'end': {
+            'name': end_aerodrome['name'],
+            'code': end_aerodrome['code'],
+            'bearing': round(end_mag_bearing),
+            'distance': round(end_distance, 1)
+        }
+    }
+
 def create_notam_template(distance1, psn1, br1, mag1, name1, ad1,
                          psn2, br2, mag2, name2, ad2, freq1, freq2, telephone):
     """Create a formatted NOTAM text based on the provided template."""
@@ -224,6 +309,8 @@ def format_coordinates_dd_to_dms(coords):
 
 def render_streamlit_app():
     st.title("NOTAM Manager")
+    # Load aerodromes
+    aerodromes = load_aerodromes('aerodromes.csv')
 
     # Sidebar for navigation
     menu_option = st.sidebar.radio("Menu", ["Read NOTAM", "Create NOTAM"])
@@ -263,6 +350,9 @@ def render_streamlit_app():
                     # Sort the coordinates by latitude, northernmost first
                     kml_coords.sort(key=lambda x: x[0], reverse=True)
                     st.success("Coordinates extracted successfully!")
+                    
+                    # Get aerodrome information
+                    aerodrome_info = get_aerodrome_info(kml_coords, aerodromes)
             except Exception as e:
                 st.error(f"An error occurred while processing the KML file: {e}")
 
@@ -276,20 +366,20 @@ def render_streamlit_app():
         col1, col2 = st.columns(2)
 
         with col1:
-            name1 = st.text_input("Name of first aviation facility", value="THANGOOL")
-            ad1 = st.text_input("First aviation facility code", value="YTNG")
+            name1 = st.text_input("Name of first aviation facility", value=aerodrome_info['start']['name'] if 'aerodrome_info' in locals() else "")
+            ad1 = st.text_input("First aviation facility code", value=aerodrome_info['start']['code'] if 'aerodrome_info' in locals() else "")
         with col2:
-            br1 = st.text_input("Bearing from first aviation facility (MAG)", value="145")
-            mag1 = st.text_input("Distance from first aviation facility (NM)", value="5")
+            br1 = st.text_input("Bearing from first aviation facility (MAG)", value=str(aerodrome_info['start']['bearing']) if 'aerodrome_info' in locals() else "")
+            mag1 = st.text_input("Distance from first aviation facility (NM)", value=str(aerodrome_info['start']['distance']) if 'aerodrome_info' in locals() else "")
 
         st.write("### Southern Point")
         col1, col2 = st.columns(2)
         with col1:
-            name2 = st.text_input("Name of second aviation facility", value="THANGOOL")
-            ad2 = st.text_input("Second aviation facility code", value="YTNG")
+            name2 = st.text_input("Name of second aviation facility", value=aerodrome_info['end']['name'] if 'aerodrome_info' in locals() else "")
+            ad2 = st.text_input("Second aviation facility code", value=aerodrome_info['end']['code'] if 'aerodrome_info' in locals() else "")
         with col2:
-            br2 = st.text_input("Bearing from second aviation facility (MAG)", value="162")
-            mag2 = st.text_input("Distance from second aviation facility (NM)", value="24")
+            br2 = st.text_input("Bearing from second aviation facility (MAG)", value=str(aerodrome_info['end']['bearing']) if 'aerodrome_info' in locals() else "")
+            mag2 = st.text_input("Distance from second aviation facility (NM)", value=str(aerodrome_info['end']['distance']) if 'aerodrome_info' in locals() else "")
 
         st.write("### Communications")
         col1, col2, col3 = st.columns(3)
