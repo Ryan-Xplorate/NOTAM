@@ -282,25 +282,22 @@ def get_aerodrome_info(kml_coords, aerodromes):
 
 def create_notam_template(distance1, psn1, br1, mag1, name1, ad1,
                           psn2, br2, mag2, name2, ad2, freq1, freq2, telephone):  
-    # Regular expression to match digits, periods, and spaces
-    valid_pattern = re.compile(r'^[\d. ]+$')
-    
-    # Check if any field contains invalid characters (anything other than digits, spaces, or '.')
-    if any(not valid_pattern.match(field) for field in [freq1, freq2, telephone]):
-        st.error("Error: One or more fields contain invalid characters. File creation aborted.")
+    # Validate input fields
+    if any(not field.replace(" ", "").replace(".", "").isdigit() for field in [freq1, freq2]) or not telephone.replace(" ", "").replace(".", "").isdigit():
+        st.error("One or more fields contain invalid characters. Have you filled out communications properly?")
         return None
-    else:
-        # Build the NOTAM template
-        template = f"""WI {distance1}NM EITHER SIDE OF A LINE BTN  
-        PSN {psn1} BRG {br1} MAG {mag1}NM FM {name1.upper()} AD {ad1} AND 
-        PSN {psn2} BRG {br2} MAG {mag2}NM FM {name2.upper()} AD {ad2}
-        OPR WILL BCST ON CTAF {freq1} AND 
-        MNT BRISBANE CENTRE FREQ {freq2} 15MIN PRIOR LAUNCH AND 
-        AT 15MIN INTERVALS WHILST AIRBORNE
-        OPR CTC TEL: {telephone}
-        UA EQUIPPED WITH ADS-B IN/OUT"""
-        
-        return template
+    
+    # Create the NOTAM template
+    template = f"""WI {distance1}NM EITHER SIDE OF A LINE BTN  
+    PSN {psn1} BRG {br1} MAG {mag1}NM FM {name1.upper()} AD {ad1} AND 
+    PSN {psn2} BRG {br2} MAG {mag2}NM FM {name2.upper()} AD {ad2}
+    OPR WILL BCST ON CTAF {freq1} AND 
+    MNT BRISBANE CENTRE FREQ {freq2} 15MIN PRIOR LAUNCH AND 
+    AT 15MIN INTERVALS WHILST AIRBORNE
+    OPR CTC TEL: {telephone}
+    UA EQUIPPED WITH ADS-B IN/OUT"""
+    
+    return template
 
 def format_coordinates_dd_to_dms(coords):
     """Format decimal degrees coordinates to DMS (Degrees, Minutes, Seconds) string."""
@@ -317,6 +314,7 @@ def format_coordinates_dd_to_dms(coords):
 
 def render_streamlit_app():
     st.title("NOTAM Manager")
+    
     # Load aerodromes
     aerodromes = load_aerodromes('aerodromes.csv')
 
@@ -413,13 +411,14 @@ def render_streamlit_app():
                     freq1, freq2, telephone
                 )
 
-                # Display generated NOTAM
-                st.subheader("Generated NOTAM:")
-                st.text_area("NOTAM Text", notam_text_generated, height=300)
+                # Ensure that notam_text_generated is not None
+                if notam_text_generated is not None:
+                    st.subheader("Generated NOTAM:")
+                    st.text_area("NOTAM Text", notam_text_generated, height=300)
 
-                # Allow downloading the NOTAM text
-                notam_bytes = notam_text_generated.encode()
-                st.markdown(get_binary_file_downloader_html(notam_bytes, 'generated_notam.txt'), unsafe_allow_html=True)
+                    # Allow downloading the NOTAM text
+                    notam_bytes = notam_text_generated.encode()
+                    st.markdown(get_binary_file_downloader_html(notam_bytes, 'generated_notam.txt'), unsafe_allow_html=True)
 
 if __name__ == "__main__":
     render_streamlit_app()
