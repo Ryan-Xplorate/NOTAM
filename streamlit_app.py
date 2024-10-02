@@ -281,18 +281,22 @@ def get_aerodrome_info(kml_coords, aerodromes):
     }
 
 def create_notam_template(distance1, psn1, br1, mag1, name1, ad1,
-                         psn2, br2, mag2, name2, ad2, freq1, freq2, telephone):
-    """Create a formatted NOTAM text based on the provided template."""
+                          psn2, br2, mag2, name2, ad2, freq1, freq2, telephone):
+    # Check if 'x' is in any of the fields freq1, freq2, or telephone
+    if 'x' in (freq1, freq2, telephone) or "" in (freq1, freq2, telephone):
+        return "Warning: One or more required fields contain 'x' or not filled in. Please correct the input."
+    
+    # Create a formatted NOTAM text based on the provided template
     template = f"""WI {distance1}NM EITHER SIDE OF A LINE BTN  
-PSN {psn1} BRG {br1} MAG {mag1}NM FM {name1.upper()} AD {ad1} AND 
-PSN {psn2} BRG {br2} MAG {mag2}NM FM {name2.upper()} AD {ad2}
-OPR WILL BCST ON CTAF {freq1} AND 
-MNT BRISBANE CENTRE FREQ {freq2} 15MIN PRIOR LAUNCH AND 
-AT 15MIN INTERVALS WHILST AIRBORNE
-OPR CTC TEL: {telephone}
-UA EQUIPPED WITH ADS-B IN/OUT"""
+    PSN {psn1} BRG {br1} MAG {mag1}NM FM {name1.upper()} AD {ad1} AND 
+    PSN {psn2} BRG {br2} MAG {mag2}NM FM {name2.upper()} AD {ad2}
+    OPR WILL BCST ON CTAF {freq1} AND 
+    MNT BRISBANE CENTRE FREQ {freq2} 15MIN PRIOR LAUNCH AND 
+    AT 15MIN INTERVALS WHILST AIRBORNE
+    OPR CTC TEL: {telephone}
+    UA EQUIPPED WITH ADS-B IN/OUT"""
+    
     return template
-
 
 def format_coordinates_dd_to_dms(coords):
     """Format decimal degrees coordinates to DMS (Degrees, Minutes, Seconds) string."""
@@ -384,9 +388,9 @@ def render_streamlit_app():
         st.write("### Communications")
         col1, col2, col3 = st.columns(3)
         with col1:
-            freq1 = st.text_input("CTAF Frequency", value="126.7")
+            freq1 = st.text_input("CTAF Frequency", value="xxx.xx")
         with col2:
-            freq2 = st.text_input("Centre Frequency", value="119.55")
+            freq2 = st.text_input("Centre Frequency", value="xxx.xx")
         with col3:
             telephone = st.text_input("Telephone", value="xxxx xxx xxx")
 
