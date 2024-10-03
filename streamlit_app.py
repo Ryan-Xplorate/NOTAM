@@ -238,8 +238,6 @@ def magnetic_bearing(true_bearing, magnetic_variation):
     """Convert true bearing to magnetic bearing."""
     return (true_bearing - magnetic_variation + 360) % 360
 
-# ... (existing code) ...
-
 def format_coordinates_dd_to_dms(coords):
     """Format decimal degrees coordinates to DMS (Degrees, Minutes, Seconds) string."""
     formatted_coords = []
@@ -298,7 +296,7 @@ def create_notam_template(distance1, psn1, br1, mag1, name1, ad1,
     AT 15 MIN INTERVALS WHILST AIRBORNE
     OPR CTC TEL: {telephone}
     UA EQUIPPED WITH ADS-B IN/OUT
-    """)
+    """).strip()
 
     return template
 
@@ -316,7 +314,7 @@ def format_coordinates_dd_to_dms(coords):
 # =========================
 
 def render_streamlit_app():
-    st.title("NOTAM Manager")
+    st.title("NOTAM Manager 🚁")
     
     # Load aerodromes
     aerodromes = load_aerodromes('aerodromes.csv')
@@ -328,6 +326,8 @@ def render_streamlit_app():
         st.header("Read NOTAM - either side of a line")
         st.write("Paste your NOTAM text below to extract coordinates and generate a KML file.")
         notam_text = st.text_area("NOTAM Text", height=200)
+
+        st.divider()
 
         if st.button("Generate KML", use_container_width=True, type="primary"):
             if notam_text:
@@ -368,24 +368,12 @@ def render_streamlit_app():
         # Input fields for NOTAM details
         st.subheader("Enter NOTAM Details")
 
+        st.divider()
+
         distance1 = st.text_input("Distance either side of the line (NM)", value="2")
 
-        # Define CSS for the border
-        border_css = """
-        <style>
-        .section {
-            border: 2px solid #4CAF50; /* Green border */
-            padding: 10px;
-            margin: 10px 0;
-        }
-        </style>
-        """
+        st.divider()
 
-        # Inject CSS into the Streamlit app
-        st.markdown(border_css, unsafe_allow_html=True)
-
-        # Layout: Use columns to organize input fields
-        st.markdown('<div class="section">', unsafe_allow_html=True)
         st.write("### Northern Point - <span style='color: yellow; font-size: 0.6em;'>automatically generated from KML file</span>", unsafe_allow_html=True)
         col1, col2 = st.columns(2)
 
@@ -397,7 +385,8 @@ def render_streamlit_app():
             mag1 = st.text_input("Distance from first aviation facility (NM)", value=str(aerodrome_info['start']['distance']) if 'aerodrome_info' in locals() else "")
         st.markdown('</div>', unsafe_allow_html=True)
 
-        st.markdown('<div class="section">', unsafe_allow_html=True)
+        st.divider()
+
         st.write("### Southern Point - <span style='color: yellow; font-size: 0.6em;'>automatically generated from KML file</span>", unsafe_allow_html=True)
         col1, col2 = st.columns(2)
         with col1:
@@ -408,7 +397,7 @@ def render_streamlit_app():
             mag2 = st.text_input("Distance from second aviation facility (NM)", value=str(aerodrome_info['end']['distance']) if 'aerodrome_info' in locals() else "")
         st.markdown('</div>', unsafe_allow_html=True)
 
-        st.markdown('<div class="section">', unsafe_allow_html=True)
+        st.divider()
 
         st.write("### Communications")
         col1, col2, col3 = st.columns(3)
@@ -418,6 +407,8 @@ def render_streamlit_app():
             freq2 = st.text_input("Centre Frequency", value="xxx.xx")
         with col3:
             telephone = st.text_input("Telephone", value="xxxx xxx xxx")
+
+        st.divider()
 
         if st.button("Create NOTAM", use_container_width=True, type="primary"):
             if not kml_coords:
