@@ -135,7 +135,7 @@ def process_notam(notam_text):
 
     # Find all matches
     coords = re.findall(coord_pattern, notam_text)
-    st.write(f"Extracted Coordinates: {coords}")  # Debug statement
+    st.write(f"Extracted Coordinates: {coords}")
 
     if len(coords) < 2:
         return "Error: Could not find two coordinate pairs in the NOTAM text."
@@ -143,25 +143,25 @@ def process_notam(notam_text):
     # Parse the first two coordinate pairs
     start_coord = parse_coordinates(coords[0])
     end_coord = parse_coordinates(coords[1])
-    st.write(f"Parsed Start Coord: {start_coord}, End Coord: {end_coord}")  # Debug
+    st.write(f"Parsed Start Coord: {start_coord}, End Coord: {end_coord}")
 
     if not start_coord or not end_coord:
         return "Error: Could not parse coordinates."
 
     # Extract buffer width
-    width_pattern = r'(\d+)\s*NM\s+EITHER\s+SIDE'
+    width_pattern = r'(\d*\.?\d+)\s*NM\s+EITHER\s+SIDE'
     width_match = re.search(width_pattern, notam_text)
-    st.write(f"Buffer Width Match: {width_match}")  # Debug
+    st.write(f"Buffer Width Match: {width_match}")
 
     if width_match:
-        width_nm = int(width_match.group(1))
-        st.write(f"Buffer Width (NM): {width_nm}")  # Debug
+        width_nm = float(width_match.group(1))  # Changed from int() to float()
+        st.write(f"Buffer Width (NM): {width_nm}")
     else:
         return "Error: Could not find buffer width in the NOTAM text."
 
     # Create buffer coordinates
     buffer_coords = create_buffer(start_coord[0], start_coord[1], end_coord[0], end_coord[1], width_nm)
-    st.write(f"Buffer Coordinates: {buffer_coords}")  # Debug
+    st.write(f"Buffer Coordinates: {buffer_coords}")
 
     # Create KML
     kml_content = create_kml(start_coord + end_coord, buffer_coords, width_nm)
@@ -246,7 +246,6 @@ def format_coordinates_dd_to_dms(coords):
         formatted_coords.append(psn)
     return formatted_coords
 
-# Add this new function
 def get_aerodrome_info(kml_coords, aerodromes):
     """Get aerodrome information for the start and end points of the KML file."""
     start_point = kml_coords[0]
@@ -259,7 +258,7 @@ def get_aerodrome_info(kml_coords, aerodromes):
     start_bearing = calculate_bearing(start_aerodrome['lat'], start_aerodrome['lon'], start_point[0], start_point[1])
     end_bearing = calculate_bearing(end_aerodrome['lat'], end_aerodrome['lon'], end_point[0], end_point[1])
     
-    # Convert to magnetic bearing (assuming 10 degrees east variation)
+    # Convert to magnetic bearing (assuming 10 degrees east variation - Queensland/Chinchilla region only!)
     magnetic_variation = 10
     start_mag_bearing = magnetic_bearing(start_bearing, magnetic_variation)
     end_mag_bearing = magnetic_bearing(end_bearing, magnetic_variation)
@@ -278,6 +277,21 @@ def get_aerodrome_info(kml_coords, aerodromes):
             'distance': round(end_distance, 1)
         }
     }
+
+def format_number(num):
+    """Format number to remove .0 if whole number"""
+    return str(int(num)) if num.is_integer() else str(num)
+
+def create_summary_template(br1, br2, dist1, dist2, ad1, ad2):
+    """Create summary with properly formatted distances and aerodrome handling"""
+    dist1_fmt = format_number(float(dist1))
+    dist2_fmt = format_number(float(dist2))
+    
+    # If both aerodromes are the same, only show one
+    ad_part = f"FM {ad1}" if ad1 == ad2 else f"FM {ad1} / {ad2}"
+    
+    summary = f"UA OPS BTN BRG {br1}-{br2}MAG {dist1_fmt}NM-{dist2_fmt}NM {ad_part}"
+    return summary
 
 def create_notam_template(distance1, psn1, br1, mag1, name1, ad1,
                           psn2, br2, mag2, name2, ad2, freq1, freq2, telephone):  
@@ -425,9 +439,12 @@ def render_streamlit_app():
                     freq1, freq2, telephone
                 )
 
+                summary_text_generated = create_summary_template(br1, br2, mag1, mag2, ad1, ad2)
+
                 # Ensure that notam_text_generated is not None
                 if notam_text_generated is not None:
                     st.subheader("Generated NOTAM:")
+                    st.text_area("Summary Text", summary_text_generated, height=50)
                     st.text_area("NOTAM Text", notam_text_generated, height=300)
 
                     # Allow downloading the NOTAM text
