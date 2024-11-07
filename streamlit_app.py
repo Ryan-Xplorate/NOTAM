@@ -645,7 +645,7 @@ def render_streamlit_app():
             
             # Apply the styling
             styled = df.style\
-                .set_caption("Column far left: Takeoff Weight (kg) | Top Row: Density Altitude (m), colored cells, engine performance")\
+                .set_caption("Column far left: Takeoff Weight (kg) | Top Row: Density Altitude (m) | Colored Cells: Engine Performance (W)")\
                 .format("{:.0f}")\
                 .apply(highlight_performance, axis=1)
             
