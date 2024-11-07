@@ -1,3 +1,5 @@
 streamlit
 geopy
 pyproj
+pandas
+numpy
