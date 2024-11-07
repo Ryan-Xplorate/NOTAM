@@ -668,11 +668,11 @@ def render_streamlit_app():
                 st.success("✅ NORMAL: Aircraft can operate safely")
             elif status == 'caution':
                 st.warning(f"""⚠️ CAUTION: Degraded Performance
-                - Max performance : {get_max_perf_for_weight(takeoff_weight):.0f} W
+                - Current weight: {takeoff_weight} kg
                 - Current DA: {0.3048 * density_altitude:.0f} m""")
             else:  # prohibited
                 st.error(f"""🚫 PROHIBITED: Operation Not Permitted
-                - Max performance : {get_max_perf_for_weight(takeoff_weight):.0f} W
+                - Current weight: {takeoff_weight} kg
                 - Current DA: {0.3048 * density_altitude:.0f} ft""")
         
         # Display the performance table
