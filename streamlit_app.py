@@ -332,6 +332,146 @@ def format_coordinates_dd_to_dms(coords):
         formatted_coords.append(psn)
     return formatted_coords
 
+def calculate_pressure_altitude(elevation_ft, pressure_hpa):
+    """Calculate pressure altitude in feet"""
+    standard_pressure = 1013.25  # hPa
+    pressure_correction = (standard_pressure - pressure_hpa) * 30
+    return elevation_ft + pressure_correction
+
+def calculate_density_altitude(pressure_altitude_ft, temperature_c, dew_point_c, pressure_hpa):
+    """Calculate density altitude in feet"""
+    standard_temp = 15.0  # °C
+    temp_lapse_rate = -0.001981  # °C/ft
+    
+    # Vapor pressure calculation
+    e = 6.11 * 10.0**((7.5 * dew_point_c) / (237.7 + dew_point_c))
+    
+    # Virtual temperature calculation
+    temp_k = temperature_c + 273.15
+    virtual_temp_k = temp_k / (1 - (e / pressure_hpa) * (1 - 0.622))
+    virtual_temp_c = virtual_temp_k - 273.15
+    
+    # ISA temperature at pressure altitude
+    isa_temp = standard_temp + (temp_lapse_rate * pressure_altitude_ft)
+    
+    # Final density altitude calculation
+    return pressure_altitude_ft + (120 * (virtual_temp_c - isa_temp))
+
+def get_max_perf_for_weight(tow):
+    """Get maximum allowable density altitude for a given weight"""
+    if tow <= 75:
+        return 7498
+    elif tow <= 79:
+        return 8131
+    elif tow <= 83:
+        return 8665
+    elif tow <= 87:
+        return 8952
+    return 0  # Above MTOW
+
+def check_performance_limits(tow, da):
+    """Check if current conditions exceed performance limits"""
+    if tow <= 75:
+        if da * 0.3048 <= 2400:
+            return 'ok'
+        return 'caution'
+    elif tow <= 79:
+        if da * 0.3048  <= 2000:
+            return 'ok'
+        elif da * 0.3048  <= 2400:
+            return 'caution'
+        return 'prohibited'
+    elif tow <= 83:
+        if da * 0.3048  <= 1600:
+            return 'ok'
+        elif da * 0.3048  <= 2200:
+            return 'caution'
+        return 'prohibited'
+    elif tow <= 87:
+        if da * 0.3048  < 0:
+            return 'ok'
+        elif da * 0.3048  <= 1600:
+            return 'caution'
+        return 'prohibited'
+    return 'prohibited'  # Above MTOW
+
+def get_interpolated_limit(df, tow, da):
+    """Get interpolated performance limit for exact TOW and DA"""
+    # Find the closest TOW rows
+    tow_values = pd.to_numeric(df.index)
+    lower_tow_idx = np.where(tow_values <= tow)[0][-1] if any(tow_values <= tow) else 0
+    upper_tow_idx = np.where(tow_values >= tow)[0][0] if any(tow_values >= tow) else len(tow_values)-1
+    
+    # Find the closest DA columns
+    da_values = pd.to_numeric(df.columns)
+    lower_da_idx = np.where(da_values <= da)[0][-1] if any(da_values <= da) else 0
+    upper_da_idx = np.where(da_values >= da)[0][0] if any(da_values >= da) else len(da_values)-1
+    
+    # Get the four corner values
+    q11 = float(df.iloc[lower_tow_idx, lower_da_idx])
+    q12 = float(df.iloc[lower_tow_idx, upper_da_idx])
+    q21 = float(df.iloc[upper_tow_idx, lower_da_idx])
+    q22 = float(df.iloc[upper_tow_idx, upper_da_idx])
+    
+    # Handle edge cases where we're at or beyond the table limits
+    if lower_tow_idx == upper_tow_idx and lower_da_idx == upper_da_idx:
+        return q11
+    
+    # Perform bilinear interpolation
+    x = (da - da_values[lower_da_idx]) / (da_values[upper_da_idx] - da_values[lower_da_idx]) if lower_da_idx != upper_da_idx else 0
+    y = (tow - tow_values[lower_tow_idx]) / (tow_values[upper_tow_idx] - tow_values[lower_tow_idx]) if lower_tow_idx != upper_tow_idx else 0
+    
+    interpolated_value = (1-x)*(1-y)*q11 + x*(1-y)*q12 + (1-x)*y*q21 + x*y*q22
+    return interpolated_value
+
+def style_dataframe(df, takeoff_weight, density_altitude):
+    """Apply styling to the dataframe with highlighted current conditions"""
+    def highlight_performance(row):
+        """Color code cells and highlight current conditions"""
+        tow = float(row.name)
+        styles = pd.Series('', index=row.index)
+        values = row.astype(float)
+        
+        # Apply coloring based on TOW ranges
+        if tow <= 75:
+            styles[values <= 7498] = 'background-color: #00ff0050'
+            styles[values > 7498] = 'background-color: #ffa50050'
+            
+        elif tow <= 79:
+            styles[values <= 7916] = 'background-color: #00ff0050'
+            styles[(values > 7916) & (values <= 8131)] = 'background-color: #ffa50050'
+            styles[values > 8131] = 'background-color: #ff000050'
+            
+        elif tow <= 83:
+            styles[values <= 8320] = 'background-color: #00ff0050'
+            styles[(values > 8320) & (values <= 8665)] = 'background-color: #ffa50050'
+            styles[values > 8665] = 'background-color: #ff000050'
+            
+        elif tow <= 87:
+            styles[values <= 8000] = 'background-color: #00ff0050'
+            styles[(values > 8000) & (values <= 8952)] = 'background-color: #ffa50050'
+            styles[values > 8952] = 'background-color: #ff000050'
+            
+        else:  # Above MTOW (> 87)
+            styles[:] = 'background-color: #ff000050'
+        
+        return styles
+    
+    # Set current conditions as attributes of the function
+    highlight_performance.current_tow = takeoff_weight
+    highlight_performance.current_da = density_altitude
+    
+    # Ensure index is numeric
+    df.index = pd.to_numeric(df.index)
+    
+    # Apply the styling
+    styled = df.style\
+        .set_caption("Column far left: Takeoff Weight (kg) | Top Row: Density Altitude (m) | Colored Cells: Engine Performance (W)")\
+        .format("{:.0f}")\
+        .apply(highlight_performance, axis=1)
+    
+    return styled
+
 
 # =========================
 # Streamlit App
@@ -485,43 +625,6 @@ def render_streamlit_app():
         takeoff_weight = st.number_input("Enter takeoff weight (kg)", value=80, min_value=46, max_value=87)
         if takeoff_weight == 87:
             st.warning("⚠️ Warning: You are at MTOW")
-        
-        def calculate_pressure_altitude(elevation_ft, pressure_hpa):
-            """Calculate pressure altitude in feet"""
-            standard_pressure = 1013.25  # hPa
-            pressure_correction = (standard_pressure - pressure_hpa) * 30
-            return elevation_ft + pressure_correction
-
-        def calculate_density_altitude(pressure_altitude_ft, temperature_c, dew_point_c, pressure_hpa):
-            """Calculate density altitude in feet"""
-            standard_temp = 15.0  # °C
-            temp_lapse_rate = -0.001981  # °C/ft
-            
-            # Vapor pressure calculation
-            e = 6.11 * 10.0**((7.5 * dew_point_c) / (237.7 + dew_point_c))
-            
-            # Virtual temperature calculation
-            temp_k = temperature_c + 273.15
-            virtual_temp_k = temp_k / (1 - (e / pressure_hpa) * (1 - 0.622))
-            virtual_temp_c = virtual_temp_k - 273.15
-            
-            # ISA temperature at pressure altitude
-            isa_temp = standard_temp + (temp_lapse_rate * pressure_altitude_ft)
-            
-            # Final density altitude calculation
-            return pressure_altitude_ft + (120 * (virtual_temp_c - isa_temp))
-        
-        def get_max_perf_for_weight(tow):
-            """Get maximum allowable density altitude for a given weight"""
-            if tow <= 75:
-                return 7498
-            elif tow <= 79:
-                return 8131
-            elif tow <= 83:
-                return 8665
-            elif tow <= 87:
-                return 8952
-            return 0  # Above MTOW
 
         # Calculate atmospheric conditions
         pressure_altitude = calculate_pressure_altitude(elevation_ft, pressure)
@@ -547,109 +650,6 @@ def render_streamlit_app():
                 f"{da_difference:+.0f} ft from deployment elevation",
                 delta_color="inverse"
             )
-        
-        def check_performance_limits(tow, da):
-            """Check if current conditions exceed performance limits"""
-            if tow <= 75:
-                if da * 0.3048 <= 2400:
-                    return 'ok'
-                return 'caution'
-            elif tow <= 79:
-                if da * 0.3048  <= 2000:
-                    return 'ok'
-                elif da * 0.3048  <= 2400:
-                    return 'caution'
-                return 'prohibited'
-            elif tow <= 83:
-                if da * 0.3048  <= 1600:
-                    return 'ok'
-                elif da * 0.3048  <= 2200:
-                    return 'caution'
-                return 'prohibited'
-            elif tow <= 87:
-                if da * 0.3048  < 0:
-                    return 'ok'
-                elif da * 0.3048  <= 1600:
-                    return 'caution'
-                return 'prohibited'
-            return 'prohibited'  # Above MTOW
-
-        def get_interpolated_limit(df, tow, da):
-            """Get interpolated performance limit for exact TOW and DA"""
-            # Find the closest TOW rows
-            tow_values = pd.to_numeric(df.index)
-            lower_tow_idx = np.where(tow_values <= tow)[0][-1] if any(tow_values <= tow) else 0
-            upper_tow_idx = np.where(tow_values >= tow)[0][0] if any(tow_values >= tow) else len(tow_values)-1
-            
-            # Find the closest DA columns
-            da_values = pd.to_numeric(df.columns)
-            lower_da_idx = np.where(da_values <= da)[0][-1] if any(da_values <= da) else 0
-            upper_da_idx = np.where(da_values >= da)[0][0] if any(da_values >= da) else len(da_values)-1
-            
-            # Get the four corner values
-            q11 = float(df.iloc[lower_tow_idx, lower_da_idx])
-            q12 = float(df.iloc[lower_tow_idx, upper_da_idx])
-            q21 = float(df.iloc[upper_tow_idx, lower_da_idx])
-            q22 = float(df.iloc[upper_tow_idx, upper_da_idx])
-            
-            # Handle edge cases where we're at or beyond the table limits
-            if lower_tow_idx == upper_tow_idx and lower_da_idx == upper_da_idx:
-                return q11
-            
-            # Perform bilinear interpolation
-            x = (da - da_values[lower_da_idx]) / (da_values[upper_da_idx] - da_values[lower_da_idx]) if lower_da_idx != upper_da_idx else 0
-            y = (tow - tow_values[lower_tow_idx]) / (tow_values[upper_tow_idx] - tow_values[lower_tow_idx]) if lower_tow_idx != upper_tow_idx else 0
-            
-            interpolated_value = (1-x)*(1-y)*q11 + x*(1-y)*q12 + (1-x)*y*q21 + x*y*q22
-            return interpolated_value
-
-        def style_dataframe(df):
-            """Apply styling to the dataframe with highlighted current conditions"""
-            def highlight_performance(row):
-                """Color code cells and highlight current conditions"""
-                tow = float(row.name)
-                styles = pd.Series('', index=row.index)
-                values = row.astype(float)
-                
-                # Apply coloring based on TOW ranges
-                if tow <= 75:
-                    styles[values <= 7498] = 'background-color: #00ff0050'
-                    styles[values > 7498] = 'background-color: #ffa50050'
-                    
-                elif tow <= 79:
-                    styles[values <= 7916] = 'background-color: #00ff0050'
-                    styles[(values > 7916) & (values <= 8131)] = 'background-color: #ffa50050'
-                    styles[values > 8131] = 'background-color: #ff000050'
-                    
-                elif tow <= 83:
-                    styles[values <= 8320] = 'background-color: #00ff0050'
-                    styles[(values > 8320) & (values <= 8665)] = 'background-color: #ffa50050'
-                    styles[values > 8665] = 'background-color: #ff000050'
-                    
-                elif tow <= 87:
-                    styles[values <= 8000] = 'background-color: #00ff0050'
-                    styles[(values > 8000) & (values <= 8952)] = 'background-color: #ffa50050'
-                    styles[values > 8952] = 'background-color: #ff000050'
-                    
-                else:  # Above MTOW (> 87)
-                    styles[:] = 'background-color: #ff000050'
-                
-                return styles
-            
-            # Set current conditions as attributes of the function
-            highlight_performance.current_tow = takeoff_weight
-            highlight_performance.current_da = density_altitude
-            
-            # Ensure index is numeric
-            df.index = pd.to_numeric(df.index)
-            
-            # Apply the styling
-            styled = df.style\
-                .set_caption("Column far left: Takeoff Weight (kg) | Top Row: Density Altitude (m) | Colored Cells: Engine Performance (W)")\
-                .format("{:.0f}")\
-                .apply(highlight_performance, axis=1)
-            
-            return styled
 
         # Performance Analysis Section
         st.divider()
@@ -678,7 +678,7 @@ def render_streamlit_app():
         # Display the performance table
         st.divider()
         st.subheader("Performance Table")
-        styled_df = style_dataframe(df)
+        styled_df = style_dataframe(df, takeoff_weight, density_altitude)
         st.table(styled_df)
         
         # Add legend
