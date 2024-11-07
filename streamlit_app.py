@@ -597,7 +597,7 @@ def render_streamlit_app():
                 # Ensure that notam_text_generated is not None
                 if notam_text_generated is not None:
                     st.subheader("Generated NOTAM:")
-                    st.text_area("Summary Text", summary_text_generated, height=50)
+                    st.text_area("Summary Text", summary_text_generated, height=68)
                     st.text_area("NOTAM Text", notam_text_generated, height=300)
 
                     # Allow downloading the NOTAM text
