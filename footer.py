@@ -11,7 +11,7 @@ def footer():
             width: calc(100% - 350px);  /* Adjust width to account for sidebar */
             margin-left: 250px;  /* Match Streamlit's sidebar width */
             background-color: white;
-            padding: 10px 0;
+            padding: 5px 0;
             z-index: 999;
             border-top: 1px solid #eee;
         }
