@@ -24,7 +24,7 @@ def footer():
             max-width: 1200px;
         }
         .main .block-container {
-            padding-bottom: 5rem;
+            padding-bottom: 2rem;
         }
         </style>
         """,
