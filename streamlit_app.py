@@ -483,7 +483,7 @@ def render_streamlit_app():
     aerodromes = load_aerodromes('aerodromes.csv')
 
     # Sidebar for navigation
-    st.sidebar.image("static/logo.png", use_column_width=True)
+    st.sidebar.image("static/logo.png",  use_container_width=True)
     menu_option = st.sidebar.radio("Menu", ["Read NOTAM", "Create NOTAM", "Check Aircraft Performance"])
 
 
