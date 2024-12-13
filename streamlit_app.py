@@ -158,14 +158,20 @@ def process_notam(notam_text):
     if not start_coord or not end_coord:
         return "Error: Could not parse coordinates."
 
-    # Extract buffer width
-    width_pattern = r'(\d*\.?\d+)\s*NM\s+EITHER\s+SIDE'
-    width_match = re.search(width_pattern, notam_text)
-    st.write(f"Buffer Width Match: {width_match}")
-
-    if width_match:
-        width_nm = float(width_match.group(1))  # Changed from int() to float()
+    # Extract buffer width with support for both NM and M
+    nm_pattern = r'(\d*\.?\d+)\s*NM\s+EITHER\s+SIDE'
+    m_pattern = r'(\d+)\s*M\s+EITHER\s+SIDE'
+    
+    nm_match = re.search(nm_pattern, notam_text)
+    m_match = re.search(m_pattern, notam_text)
+    
+    if nm_match:
+        width_nm = float(nm_match.group(1))
         st.write(f"Buffer Width (NM): {width_nm}")
+    elif m_match:
+        meters = float(m_match.group(1))
+        width_nm = meters / 1852  # Convert meters to nautical miles
+        st.write(f"Buffer Width: {meters}M ({width_nm:.2f}NM)")
     else:
         return "Error: Could not find buffer width in the NOTAM text."
 
@@ -257,16 +263,34 @@ def format_coordinates_dd_to_dms(coords):
     return formatted_coords
 
 def get_aerodrome_info(kml_coords, aerodromes):
-    """Get aerodrome information for the start and end points of the KML file."""
+    """Get aerodrome information for the start and end points of the KML file using single closest facility."""
     start_point = kml_coords[0]
     end_point = kml_coords[-1]
     
-    start_aerodrome, start_distance = find_closest_aerodrome(start_point[0], start_point[1], aerodromes)
-    end_aerodrome, end_distance = find_closest_aerodrome(end_point[0], end_point[1], aerodromes)
+    # Find the single closest aerodrome to either point
+    start_distance = geodesic((start_point[0], start_point[1]), (aerodromes[0]['lat'], aerodromes[0]['lon'])).nautical
+    closest_aerodrome = aerodromes[0]
+    min_distance = start_distance
     
-    # Calculate bearings FROM the aerodromes TO the points
-    start_bearing = calculate_bearing(start_aerodrome['lat'], start_aerodrome['lon'], start_point[0], start_point[1])
-    end_bearing = calculate_bearing(end_aerodrome['lat'], end_aerodrome['lon'], end_point[0], end_point[1])
+    for aerodrome in aerodromes:
+        # Check distance to start point
+        dist_to_start = geodesic((start_point[0], start_point[1]), (aerodrome['lat'], aerodrome['lon'])).nautical
+        dist_to_end = geodesic((end_point[0], end_point[1]), (aerodrome['lat'], aerodrome['lon'])).nautical
+        
+        # Update if this aerodrome is closer to either point
+        if dist_to_start < min_distance or dist_to_end < min_distance:
+            closest_aerodrome = aerodrome
+            min_distance = min(dist_to_start, dist_to_end)
+    
+    # Calculate bearings FROM the aerodrome TO both points
+    start_bearing = calculate_bearing(closest_aerodrome['lat'], closest_aerodrome['lon'], start_point[0], start_point[1])
+    end_bearing = calculate_bearing(closest_aerodrome['lat'], closest_aerodrome['lon'], end_point[0], end_point[1])
+    
+    # Calculate distances from the aerodrome to both points
+    start_distance = geodesic((start_point[0], start_point[1]), 
+                            (closest_aerodrome['lat'], closest_aerodrome['lon'])).nautical
+    end_distance = geodesic((end_point[0], end_point[1]), 
+                          (closest_aerodrome['lat'], closest_aerodrome['lon'])).nautical
     
     # Convert to magnetic bearing (assuming 10 degrees east variation - Queensland/Chinchilla region only!)
     magnetic_variation = 10
@@ -275,14 +299,14 @@ def get_aerodrome_info(kml_coords, aerodromes):
     
     return {
         'start': {
-            'name': start_aerodrome['name'],
-            'code': start_aerodrome['code'],
+            'name': closest_aerodrome['name'],
+            'code': closest_aerodrome['code'],
             'bearing': round(start_mag_bearing),
             'distance': round(start_distance, 1)
         },
         'end': {
-            'name': end_aerodrome['name'],
-            'code': end_aerodrome['code'],
+            'name': closest_aerodrome['name'],
+            'code': closest_aerodrome['code'],
             'bearing': round(end_mag_bearing),
             'distance': round(end_distance, 1)
         }
@@ -303,23 +327,25 @@ def create_summary_template(br1, br2, dist1, dist2, ad1, ad2):
     summary = f"UA OPS BTN BRG {br1}-{br2}MAG {dist1_fmt}NM-{dist2_fmt}NM {ad_part}"
     return summary
 
-def create_notam_template(distance1, psn1, br1, mag1, name1, ad1,
-                          psn2, br2, mag2, name2, ad2, freq1, freq2, telephone):  
-    # Validate input fields
+def create_notam_template(distance1, psn1, br1, mag1, psn2, br2, mag2, name, ad, freq1, freq2, telephone, distance_units="Nautical Miles"):
+    """Updated NOTAM template using single aviation facility and handling different distance units."""
+    # Validate only the communication fields
     if any(not field.replace(" ", "").replace(".", "").isdigit() for field in [freq1, freq2]) or not telephone.replace(" ", "").replace(".", "").isdigit():
         st.error("One or more fields contain invalid characters. Have you filled out communications properly?")
         return None
     
+    # Set the distance unit for display
+    distance_unit = "NM" if distance_units == "Nautical Miles" else "M"
+    
     # Create the NOTAM template
     template = textwrap.dedent(f"""
-    WI {distance1} NM EITHER SIDE OF A LINE BTN  
-    PSN {psn1} BRG {br1} MAG {mag1} NM FM {name1.upper()} AD ({ad1}) AND 
-    PSN {psn2} BRG {br2} MAG {mag2} NM FM {name2.upper()} AD ({ad2})
+    WI {distance1}{distance_unit} EITHER SIDE OF A LINE BTN  
+    PSN {psn1} BRG {br1} MAG {mag1} NM FM {name.upper()} AD ({ad}) AND 
+    PSN {psn2} BRG {br2} MAG {mag2} NM FM {name.upper()} AD ({ad})
     OPR WILL BCST ON CTAF {freq1} AND 
     MNT BRISBANE CENTRE FREQ {freq2} 15 MIN PRIOR LAUNCH AND 
     AT 15 MIN INTERVALS WHILST AIRBORNE
     OPR CTC TEL: {telephone}
-    UA EQUIPPED WITH ADS-B IN/OUT
     """).strip()
 
     return template
@@ -483,14 +509,21 @@ def render_streamlit_app():
     aerodromes = load_aerodromes('aerodromes.csv')
 
     # Sidebar for navigation
-    st.sidebar.image("static/logo.png",  use_container_width=True)
+    st.sidebar.image("static/logo.png", use_column_width=True)
     menu_option = st.sidebar.radio("Menu", ["Read NOTAM", "Create NOTAM", "Check Aircraft Performance"])
-
 
     if menu_option == "Read NOTAM":
         st.title("NOTAM Manager 🚁")
         st.header("Read NOTAM - either side of a line")
         st.write("Paste your NOTAM text below to extract coordinates and generate a KML file.")
+
+        # Add help text explaining supported formats
+        st.info("""
+        Supported NOTAM formats:
+        - Distances can be in Nautical Miles (e.g., "2NM EITHER SIDE") or Meters (e.g., "2000M EITHER SIDE")
+        - Coordinates must be in DMS format (e.g., "PSN 273015S 1524422E")
+        """)
+
         notam_text = st.text_area("NOTAM Text", height=200)
 
         st.divider()
@@ -512,7 +545,7 @@ def render_streamlit_app():
         st.write("Upload a KML file to extract coordinates and fill in the NOTAM template.")
 
         # Upload KML file
-        uploaded_file = st.file_uploader("Upload KML file", type=["kml"])
+        uploaded_file = st.file_uploader("Upload KML file", type=["kml"], key="kml_uploader")
         kml_coords = []
 
         if uploaded_file:
@@ -537,43 +570,48 @@ def render_streamlit_app():
 
         st.divider()
 
-        distance1 = st.text_input("Distance either side of the line (NM)", value="2")
+        distance_units = st.radio("Distance Units", ["Nautical Miles", "Meters"], index=0, key="distance_units", help="Distances less than 2nm should be in meters.")
+
+        if distance_units == "Nautical Miles":
+            distance1 = st.text_input("Distance either side of the line (NM)", value="2", key="distance")
+        else:
+            distance1 = st.text_input("Distance either side of the line (meters)", value="2000", key="distance")
 
         st.divider()
 
-        st.write("### Northern Point - <span style='color: yellow; font-size: 0.6em;'>automatically generated from KML file</span>", unsafe_allow_html=True)
+        st.write("### Nearest Aviation Facility - <span style='color: yellow; font-size: 0.6em;'>automatically selected closest facility</span>", unsafe_allow_html=True)
         col1, col2 = st.columns(2)
 
         with col1:
-            name1 = st.text_input("Name of first aviation facility", value=aerodrome_info['start']['name'] if 'aerodrome_info' in locals() else "")
-            ad1 = st.text_input("First aviation facility code", value=aerodrome_info['start']['code'] if 'aerodrome_info' in locals() else "")
+            name = st.text_input("Aviation facility name", value=aerodrome_info['start']['name'] if 'aerodrome_info' in locals() else "", key="ad_name")
         with col2:
-            br1 = st.text_input("Bearing from first aviation facility (MAG)", value=str(aerodrome_info['start']['bearing']) if 'aerodrome_info' in locals() else "")
-            mag1 = st.text_input("Distance from first aviation facility (NM)", value=str(aerodrome_info['start']['distance']) if 'aerodrome_info' in locals() else "")
-        st.markdown('</div>', unsafe_allow_html=True)
+            ad = st.text_input("Aviation facility code", value=aerodrome_info['start']['code'] if 'aerodrome_info' in locals() else "", key="ad_code")
 
         st.divider()
 
-        st.write("### Southern Point - <span style='color: yellow; font-size: 0.6em;'>automatically generated from KML file</span>", unsafe_allow_html=True)
         col1, col2 = st.columns(2)
         with col1:
-            name2 = st.text_input("Name of second aviation facility", value=aerodrome_info['end']['name'] if 'aerodrome_info' in locals() else "")
-            ad2 = st.text_input("Second aviation facility code", value=aerodrome_info['end']['code'] if 'aerodrome_info' in locals() else "")
+            st.write("### Northern Point")
+            br1 = st.text_input("Bearing from aviation facility (MAG)", value=str(aerodrome_info['start']['bearing']) if 'aerodrome_info' in locals() else "", key="bearing1")
+            mag1 = st.text_input("Distance from aviation facility (NM)", value=str(aerodrome_info['start']['distance']) if 'aerodrome_info' in locals() else "", key="distance1")
+
         with col2:
-            br2 = st.text_input("Bearing from second aviation facility (MAG)", value=str(aerodrome_info['end']['bearing']) if 'aerodrome_info' in locals() else "")
-            mag2 = st.text_input("Distance from second aviation facility (NM)", value=str(aerodrome_info['end']['distance']) if 'aerodrome_info' in locals() else "")
-        st.markdown('</div>', unsafe_allow_html=True)
+            st.write("### Southern Point")
+            br2 = st.text_input("Bearing from aviation facility (MAG)", value=str(aerodrome_info['end']['bearing']) if 'aerodrome_info' in locals() else "", key="bearing2")
+            mag2 = st.text_input("Distance from aviation facility (NM)", value=str(aerodrome_info['end']['distance']) if 'aerodrome_info' in locals() else "", key="distance2")
 
         st.divider()
 
         st.write("### Communications")
         col1, col2, col3 = st.columns(3)
         with col1:
-            freq1 = st.text_input("CTAF Frequency", value="xxx.xx")
+            freq1 = st.text_input("CTAF Frequency", value="xxx.xx", key="ctaf_freq")
         with col2:
-            freq2 = st.text_input("Centre Frequency", value="xxx.xx")
+            freq2 = st.text_input("Centre Frequency", value="xxx.xx", key="centre_freq")
         with col3:
-            telephone = st.text_input("Telephone", value="xxxx xxx xxx")
+            telephone = st.text_input("Telephone", value="xxxx xxx xxx", key="telephone")
+        
+        ads_b_enabled = st.checkbox("ADS-B In/Out equipped", value=True, key="ads_b_enable")
 
         st.divider()
 
@@ -587,14 +625,22 @@ def render_streamlit_app():
 
                 # Create NOTAM text with northern point first
                 notam_text_generated = create_notam_template(
-                    distance1, psn1, br1, mag1, name1, ad1,
-                    psn2, br2, mag2, name2, ad2,
-                    freq1, freq2, telephone
+                    distance1, psn1, br1, mag1,
+                    psn2, br2, mag2,
+                    name, ad,
+                    freq1, freq2, telephone,
+                    distance_units
                 )
 
-                summary_text_generated = create_summary_template(br1, br2, mag1, mag2, ad1, ad2)
+                # Add ADS-B line if enabled
+                if notam_text_generated is not None:
+                    if ads_b_enabled:
+                        notam_text_generated += "\nUA EQUIPPED WITH ADS-B IN/OUT"
 
-                # Ensure that notam_text_generated is not None
+                # Create summary
+                summary_text_generated = create_summary_template(br1, br2, mag1, mag2, ad, ad)
+
+                # Display generated NOTAM
                 if notam_text_generated is not None:
                     st.subheader("Generated NOTAM:")
                     st.text_area("Summary Text", summary_text_generated, height=68)
@@ -603,7 +649,7 @@ def render_streamlit_app():
                     # Allow downloading the NOTAM text
                     notam_bytes = notam_text_generated.encode()
                     st.markdown(get_binary_file_downloader_html(notam_bytes, 'generated_notam.txt'), unsafe_allow_html=True)
-        
+
     elif menu_option == "Check Aircraft Performance":
         # Load performance data at the start
         df = pd.read_csv('performance.csv', index_col='TOW (kg)')
