@@ -17,10 +17,10 @@ def footer():
         }
         footer p {
             color: #888;
-            font-size: 8px;
+            font-size: 12px;
             text-align: center;
             margin: 20px auto;  /* Center the paragraph */
-            padding: 0 40px;
+            padding: 0 20px;
             max-width: 1200px;
         }
         .main .block-container {
