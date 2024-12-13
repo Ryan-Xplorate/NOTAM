@@ -8,7 +8,7 @@ def footer():
             position: fixed;
             bottom: 0;
             right: 0;
-            width: calc(100% - 250px);  /* Adjust width to account for sidebar */
+            width: calc(100% - 350px);  /* Adjust width to account for sidebar */
             margin-left: 250px;  /* Match Streamlit's sidebar width */
             background-color: white;
             padding: 10px 0;
@@ -17,7 +17,7 @@ def footer():
         }
         footer p {
             color: #888;
-            font-size: 10px;
+            font-size: 8px;
             text-align: center;
             margin: 20px auto;  /* Center the paragraph */
             padding: 0 40px;
