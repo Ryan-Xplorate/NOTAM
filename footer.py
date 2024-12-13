@@ -18,9 +18,9 @@ def footer():
         }
         footer p {
             color: #888;
-            font-size: 12px;
+            font-size: 10px;
             text-align: center;
-            margin: 0;
+            margin: 20px;
             padding: 0 20px;
             margin-left: 25%;  /* Offset text to avoid sidebar */
             max-width: 75%;  /* Ensure text doesn't stretch too far */
