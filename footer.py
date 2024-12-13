@@ -7,7 +7,7 @@ def footer():
         <style>
         footer {
             position: fixed;
-            left: 0;
+            left: 30px;
             bottom: 0;
             width: 100%;
             background-color: white;
@@ -22,8 +22,8 @@ def footer():
             text-align: center;
             margin: 20px;
             padding: 0 20px;
-            margin-left: 40%;  /* Offset text to avoid sidebar */
-            max-width: 60%;  /* Ensure text doesn't stretch too far */
+            margin-left: 25%;  /* Offset text to avoid sidebar */
+            max-width: 90%;  /* Ensure text doesn't stretch too far */
         }
         .main .block-container {
             padding-bottom: 5rem;
