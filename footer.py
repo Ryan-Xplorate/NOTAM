@@ -8,7 +8,8 @@ def footer():
             position: fixed;
             bottom: 0;
             right: 0;
-            width: 100%;
+            width: calc(100% - 250px);  /* Adjust width to account for sidebar */
+            margin-left: 250px;  /* Match Streamlit's sidebar width */
             background-color: white;
             padding: 10px 0;
             z-index: 999;
@@ -18,24 +19,12 @@ def footer():
             color: #888;
             font-size: 10px;
             text-align: center;
-            margin: 20px;
-            padding: 0 20px;
-            margin-left: 400px;  /* Large enough margin to clear the sidebar */
-            margin-right: 20px;  /* Prevent text from touching the right edge */
+            margin: 20px auto;  /* Center the paragraph */
+            padding: 0 40px;
+            max-width: 1200px;
         }
         .main .block-container {
             padding-bottom: 5rem;
-        }
-        /* Make footer responsive */
-        @media screen and (max-width: 1200px) {
-            footer p {
-                margin-left: 300px;
-            }
-        }
-        @media screen and (max-width: 992px) {
-            footer p {
-                margin-left: 250px;
-            }
         }
         </style>
         """,
